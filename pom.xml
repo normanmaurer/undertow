@@ -96,6 +96,7 @@
         <module>servlet</module>
         <module>jsp</module>
         <module>websockets</module>
+        <module>websockets-jsr</module>
     </modules>
 
     <build>
@@ -226,6 +227,12 @@
                 <scope>test</scope>
             </dependency>
 
+            <dependency>
+                <groupId>io.undertow</groupId>
+                <artifactId>undertow-websockets</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- External Dependencies -->
             <dependency>
                 <groupId>org.jboss.classfilewriter</groupId>
@@ -320,6 +327,12 @@
                 <groupId>org.jboss.xnio</groupId>
                 <artifactId>xnio-nio</artifactId>
                 <version>${version.xnio}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>javax.websocket</groupId>
+                <artifactId>javax.websocket-api</artifactId>
+                <version>1.0-b11</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
