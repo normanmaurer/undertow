@@ -100,6 +100,7 @@ final class WebSocketChannelSession implements Session {
 
     @Override
     public void addMessageHandler(MessageHandler messageHandler) throws IllegalStateException {
+        // TODO: Think about if there is an easier and cleaner way of doing this
         TypeVariable[] m = messageHandler.getClass().getTypeParameters();
         if (m.length != 1) {
             throw WebSocketJsrMessages.MESSAGES.missingHandlerTypeParam();
@@ -156,12 +157,14 @@ final class WebSocketChannelSession implements Session {
 
     @Override
     public String getNegotiatedSubprotocol() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        // TODO: Implement me
+        return null;
     }
 
     @Override
     public List<String> getNegotiatedExtensions() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        // TODO: Implement me
+        return Collections.emptyList();
     }
 
     @Override
@@ -229,6 +232,7 @@ final class WebSocketChannelSession implements Session {
             StreamSinkFrameChannel sink = channel.send(WebSocketFrameType.CLOSE, size);
             WebSocketJsrUtils.send(sink, buffer, future);
             future.get();
+            IoUtils.safeClose(channel);
         } catch (Throwable cause) {
             future.setResult(new SendResult(cause));
         } finally {
@@ -285,6 +289,11 @@ final class WebSocketChannelSession implements Session {
                 if (frame == null) {
                     return;
                 }
+                long size = frame.getPayloadSize();
+                if (size > getMaximumMessageSize()) {
+                    WebSocketChannelSession.this.close(new CloseReason(CloseReason.CloseCodes.TOO_BIG, null));
+                    return;
+                }
                 WebSocketFrameType frameType = frame.getType();
                 if (frameType == WebSocketFrameType.CONTINUATION) {
                     if (type == null) {
@@ -298,7 +307,6 @@ final class WebSocketChannelSession implements Session {
 
                 if (messageHandler == null) {
                     if (frameType == WebSocketFrameType.CLOSE || frameType == WebSocketFrameType.PING) {
-                        long size = frame.getPayloadSize();
 
                         final StreamSinkFrameChannel sink;
                         if (frameType == WebSocketFrameType.PING) {
@@ -470,7 +478,6 @@ final class WebSocketChannelSession implements Session {
                 } else if (handler instanceof MessageHandler.Basic) {
                     final MessageHandler.Basic basicHandler = (MessageHandler.Basic) handler;
 
-                    long size = frame.getPayloadSize();
                     final ByteBuffer buffer = ByteBuffer.allocate((int) size);
                     for (;;) {
                         int r = frame.read(buffer);
