@@ -23,10 +23,10 @@ import java.nio.ByteBuffer;
 /**
  * @author <a href="mailto:nmaurer@redhat.com">Norman Maurer</a>
  */
-final class PongMessageImpl implements PongMessage {
+final class DefaultPongMessage implements PongMessage {
     private final ByteBuffer data;
 
-    public PongMessageImpl(ByteBuffer data) {
+    public DefaultPongMessage(ByteBuffer data) {
         if (data.isReadOnly()) {
             this.data = data;
         } else {
