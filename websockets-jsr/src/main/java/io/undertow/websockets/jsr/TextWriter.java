@@ -28,8 +28,7 @@ import java.io.Writer;
 /**
  * {@link Writer} which can be used write a text message to a {@link RemoteEndpoint}.
  *
- * The message will be send on {@link #close()} but there is no guarantee that it will success, which is fine by the
- * spec.
+ * The message will be send on {@link #close()}.
  *
  * @author <a href="mailto:nmaurer@redhat.com">Norman Maurer</a>
  */
@@ -46,7 +45,6 @@ final class TextWriter extends StringWriter {
     @Override
     public void close() throws IOException {
         super.close();
-        // As the spec says it MAY send the data I think it is ok to not block on send here
-        endpoint.sendStringByCompletion(toString(), WebSocketJsrUtils.NOOP_SEND_HANDLER);
+        endpoint.sendString(toString());
     }
 }

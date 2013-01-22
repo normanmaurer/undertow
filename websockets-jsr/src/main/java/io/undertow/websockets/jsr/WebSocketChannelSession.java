@@ -277,6 +277,7 @@ final class WebSocketChannelSession implements Session {
     private final class WebSocketChannelSessionListener implements ChannelListener<WebSocketChannel> {
         private final Endpoint endpoint;
         private WebSocketFrameType type;
+        private long fullSize;
 
         public WebSocketChannelSessionListener(Endpoint endpoint) {
             this.endpoint = endpoint;
@@ -289,11 +290,7 @@ final class WebSocketChannelSession implements Session {
                 if (frame == null) {
                     return;
                 }
-                long size = frame.getPayloadSize();
-                if (size > getMaximumMessageSize()) {
-                    WebSocketChannelSession.this.close(new CloseReason(CloseReason.CloseCodes.TOO_BIG, null));
-                    return;
-                }
+
                 WebSocketFrameType frameType = frame.getType();
                 if (frameType == WebSocketFrameType.CONTINUATION) {
                     if (type == null) {
@@ -303,6 +300,14 @@ final class WebSocketChannelSession implements Session {
                         frameType = type;
                     }
                 }
+                long size = frame.getPayloadSize();
+                fullSize += size;
+                if (fullSize > getMaximumMessageSize() && (frameType == WebSocketFrameType.BINARY || frameType == WebSocketFrameType.TEXT)) {
+                    // size is pigger then the maximum messagesize of TEXT / BINARY frames
+                    WebSocketChannelSession.this.close(new CloseReason(CloseReason.CloseCodes.TOO_BIG, null));
+                    return;
+                }
+
                 final MessageHandler messageHandler = handlers.get(frameType);
 
                 if (messageHandler == null) {
@@ -524,6 +529,7 @@ final class WebSocketChannelSession implements Session {
             if (source.isFinalFragment()) {
                 // final frame receive the stored type information
                 type = null;
+                fullSize = 0;
             }
             IoUtils.safeClose(source);
         }

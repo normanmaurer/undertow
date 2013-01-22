@@ -26,8 +26,7 @@ import java.nio.ByteBuffer;
 /**
  * {@link OutputStream} which can be used write a binary message to a {@link RemoteEndpoint}.
  *
- * The message will be send on {@link #close()} but there is no guarantee that it will success, which is fine by the
- * spec.
+ * The message will be send on {@link #close()}.
  *
  * @author <a href="mailto:nmaurer@redhat.com">Norman Maurer</a>
  */
@@ -45,7 +44,6 @@ final class BinaryOutputStream extends ByteArrayOutputStream {
     public void close() throws IOException {
         super.close();
 
-        // As the spec says it MAY send the data I think it is ok to not block on send here
-        endpoint.sendBytesByCompletion(ByteBuffer.wrap(toByteArray()), WebSocketJsrUtils.NOOP_SEND_HANDLER);
+        endpoint.sendBytes(ByteBuffer.wrap(toByteArray()));
     }
 }

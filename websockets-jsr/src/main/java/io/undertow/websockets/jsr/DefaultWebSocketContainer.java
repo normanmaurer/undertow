@@ -17,6 +17,9 @@
  */
 package io.undertow.websockets.jsr;
 
+import io.undertow.websockets.WebSocketChannel;
+import org.xnio.ChannelListener;
+
 import javax.websocket.ClientEndpointConfiguration;
 import javax.websocket.DeploymentException;
 import javax.websocket.Endpoint;
@@ -25,6 +28,7 @@ import javax.websocket.Session;
 import javax.websocket.WebSocketContainer;
 import java.net.URI;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -37,6 +41,7 @@ public class DefaultWebSocketContainer implements WebSocketContainer {
     private volatile long maxBinaryMessageBufferSize;
     private volatile long maxTextMessageBufferSize;
     private volatile long defaultAsyncSendTimeout;
+    private final Set<Session> openSessions = Collections.synchronizedSet(new HashSet<Session>());
 
     @Override
     public long getDefaultAsyncSendTimeout() {
@@ -55,12 +60,21 @@ public class DefaultWebSocketContainer implements WebSocketContainer {
 
     @Override
     public Session connectToServer(Class<? extends Endpoint> aClass, ClientEndpointConfiguration clientEndpointConfiguration, URI uri) throws DeploymentException {
-        return null;  // TODO: Implement me
+        final WebSocketChannelSession session = null;
+        session.getChannel().getCloseSetter().set(new ChannelListener<WebSocketChannel>() {
+            @Override
+            public void handleEvent(WebSocketChannel channel) {
+                openSessions.remove(session);
+            }
+        });
+        openSessions.add(session);
+        return session;
     }
 
     @Override
     public Set<Session> getOpenSessions() {
-        return Collections.emptySet();
+        // Maybe better make a copy ?
+        return Collections.unmodifiableSet(openSessions);
     }
 
     @Override
