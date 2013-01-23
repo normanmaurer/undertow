@@ -52,8 +52,6 @@ final class DefaultFuture implements Future<SendResult>, SendHandler {
 
     /**
      * Returns {@code true}
-     * @param mayInterruptIfRunning
-     * @return
      */
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
