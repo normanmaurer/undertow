@@ -39,21 +39,19 @@ import java.util.concurrent.TimeUnit;
 
 /**
  *
- * TODO:
- *  - Handle send Object
- *  - Implement sendPartial*
+ * Default {@link RemoteEndpoint} implementation.
  *
  * @author <a href="mailto:nmaurer@redhat.com">Norman Maurer</a>
  */
-public class DefaultRemoteEndpoint implements RemoteEndpoint {
+final class DefaultRemoteEndpoint implements RemoteEndpoint {
     private final WebSocketChannelSession session;
     private volatile boolean batchingAllowed;
     private volatile long asyncSendTimeout;
-
+    private BinaryOutputStream binaryStream;
+    private TextWriter textWriter;
 
     public DefaultRemoteEndpoint(WebSocketChannelSession session) {
         this.session = session;
-
     }
 
     @Override
@@ -105,13 +103,43 @@ public class DefaultRemoteEndpoint implements RemoteEndpoint {
     }
 
     @Override
-    public void sendPartialString(String s, boolean b) throws IOException {
-        // TODO: Implement me
+    public void sendPartialString(String s, boolean last) throws IOException {
+        synchronized (this) {
+            if (textWriter == null) {
+                if (!last) {
+                    textWriter = new TextWriter(this);
+                }
+            }
+            if (textWriter != null) {
+                textWriter.write(s);
+                if (last) {
+                    textWriter.close();
+                    textWriter = null;
+                }
+                return;
+            }
+        }
+        sendString(s);
     }
 
     @Override
-    public void sendPartialBytes(ByteBuffer byteBuffer, boolean b) throws IOException {
-        // TODO: Implement me
+    public void sendPartialBytes(ByteBuffer byteBuffer, boolean last) throws IOException {
+        synchronized (this) {
+            if (binaryStream == null) {
+                if (!last) {
+                    binaryStream = new BinaryOutputStream(this);
+                }
+            }
+            if (binaryStream != null) {
+                binaryStream.write(byteBuffer);
+                if (last) {
+                    binaryStream.close();
+                    binaryStream = null;
+                }
+                return;
+            }
+        }
+        sendBytes(byteBuffer);
     }
 
     @Override

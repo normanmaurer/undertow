@@ -40,6 +40,16 @@ final class BinaryOutputStream extends ByteArrayOutputStream {
         this.endpoint = endpoint;
     }
 
+    public void write(ByteBuffer buffer) {
+        if (buffer.hasArray()) {
+            write(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+        } else {
+            while (buffer.hasRemaining()) {
+                write(buffer.get());
+            }
+        }
+    }
+
     @Override
     public void close() throws IOException {
         super.close();
