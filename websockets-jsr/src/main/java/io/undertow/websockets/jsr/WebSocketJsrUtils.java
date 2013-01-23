@@ -78,13 +78,13 @@ public final class WebSocketJsrUtils {
      * Send the given {@link ByteBuffer} via the {@link StreamSinkFrameChannel} and notify the {@link SendHandler} once
      * the operation completes.
      */
-    public static void send(final StreamSinkFrameChannel sink, final ByteBuffer buffer, final SendHandler sendHandler) {
+    public static void send(final StreamSinkChannel sink, final ByteBuffer buffer, final SendHandler sendHandler) {
         try {
             while (buffer.hasRemaining()) {
                 if (sink.write(buffer) == 0) {
-                    sink.getWriteSetter().set(new ChannelListener<StreamSinkFrameChannel>() {
+                    sink.getWriteSetter().set(new ChannelListener<StreamSinkChannel>() {
                         @Override
-                        public void handleEvent(StreamSinkFrameChannel sink) {
+                        public void handleEvent(StreamSinkChannel sink) {
                             while (buffer.hasRemaining()) {
                                 try {
                                     if (sink.write(buffer) == 0) {

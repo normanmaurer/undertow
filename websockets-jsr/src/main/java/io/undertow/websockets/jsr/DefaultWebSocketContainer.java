@@ -61,6 +61,7 @@ public class DefaultWebSocketContainer implements WebSocketContainer {
     @Override
     public Session connectToServer(Class<? extends Endpoint> aClass, ClientEndpointConfiguration clientEndpointConfiguration, URI uri) throws DeploymentException {
         try {
+            WebSocketChannel channel = null;
             final WebSocketChannelSession session = new WebSocketChannelSession(null, this, aClass.newInstance(), null, clientEndpointConfiguration);
             session.getChannel().getCloseSetter().set(new ChannelListener<WebSocketChannel>() {
                 @Override

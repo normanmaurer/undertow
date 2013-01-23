@@ -17,12 +17,11 @@
  */
 package io.undertow.websockets.jsr;
 
+import io.undertow.channels.WriteTimeoutStreamSinkChannel;
 import io.undertow.websockets.StreamSinkFrameChannel;
 import io.undertow.websockets.WebSocketFrameType;
 import io.undertow.websockets.WebSocketUtils;
-import org.xnio.ChannelListener;
-import org.xnio.IoUtils;
-import org.xnio.XnioExecutor;
+import org.xnio.Options;
 import org.xnio.channels.StreamSinkChannel;
 
 import javax.websocket.EncodeException;
@@ -35,7 +34,6 @@ import java.io.OutputStream;
 import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -211,16 +209,12 @@ final class DefaultRemoteEndpoint implements RemoteEndpoint {
 
     private void sendByCompletion(WebSocketFrameType type, ByteBuffer byteBuffer, SendHandler sendHandler, long timeout) {
         try {
-            StreamSinkFrameChannel sink = session.getChannel().send(type, byteBuffer.remaining());
+            StreamSinkChannel sink = session.getChannel().send(type, byteBuffer.remaining());
 
             if (timeout > 0) {
-                final XnioExecutor.Key key = sink.getWriteThread().executeAfter(new WriteTimeoutTask(session, sink), timeout, TimeUnit.MILLISECONDS);
-                sink.getCloseSetter().set(new ChannelListener<StreamSinkChannel>() {
-                    @Override
-                    public void handleEvent(StreamSinkChannel sink) {
-                        key.remove();
-                    }
-                });
+                // handle timeouts
+                sink.setOption(Options.WRITE_TIMEOUT, (int) timeout);
+                sink = new WriteTimeoutStreamSinkChannel(sink);
             }
             WebSocketJsrUtils.send(sink, byteBuffer, sendHandler);
         } catch (Throwable cause) {
@@ -289,25 +283,6 @@ final class DefaultRemoteEndpoint implements RemoteEndpoint {
         } catch (Throwable t) {
             // TODO: Is this correct ?
             session.getEndpoint().onError(session, t);
-        }
-    }
-
-    private static final class WriteTimeoutTask implements Runnable {
-        private final WebSocketChannelSession session;
-        private final StreamSinkFrameChannel sink;
-        public WriteTimeoutTask(WebSocketChannelSession session, StreamSinkFrameChannel sink) {
-            this.session = session;
-            this.sink = sink;
-        }
-        @Override
-        public void run() {
-            // TODO: Proper status code ?
-            try {
-                session.close();
-                IoUtils.safeClose(sink);
-            } catch (IOException e) {
-                // ignore
-            }
         }
     }
 }
