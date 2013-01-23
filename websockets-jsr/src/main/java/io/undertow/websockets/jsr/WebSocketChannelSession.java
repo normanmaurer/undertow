@@ -303,7 +303,7 @@ final class WebSocketChannelSession implements Session {
                 long size = frame.getPayloadSize();
                 fullSize += size;
                 if (fullSize > getMaximumMessageSize() && (frameType == WebSocketFrameType.BINARY || frameType == WebSocketFrameType.TEXT)) {
-                    // size is pigger then the maximum messagesize of TEXT / BINARY frames
+                    // size is bigger then the maximum messagesize of TEXT / BINARY frames
                     WebSocketChannelSession.this.close(new CloseReason(CloseReason.CloseCodes.TOO_BIG, null));
                     return;
                 }
@@ -482,7 +482,14 @@ final class WebSocketChannelSession implements Session {
                     }
                 } else if (handler instanceof MessageHandler.Basic) {
                     final MessageHandler.Basic basicHandler = (MessageHandler.Basic) handler;
-
+                    if (type == WebSocketFrameType.TEXT && size > getContainer().getMaxTextMessageBufferSize()) {
+                        WebSocketChannelSession.this.close(new CloseReason(CloseReason.CloseCodes.TOO_BIG, null));
+                        return;
+                    }
+                    if (type == WebSocketFrameType.BINARY && size > getContainer().getMaxBinaryMessageBufferSize()) {
+                        WebSocketChannelSession.this.close(new CloseReason(CloseReason.CloseCodes.TOO_BIG, null));
+                        return;
+                    }
                     final ByteBuffer buffer = ByteBuffer.allocate((int) size);
                     for (;;) {
                         int r = frame.read(buffer);

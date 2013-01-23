@@ -20,6 +20,10 @@ package io.undertow.websockets.jsr;
 import io.undertow.websockets.StreamSinkFrameChannel;
 import io.undertow.websockets.WebSocketFrameType;
 import io.undertow.websockets.WebSocketUtils;
+import org.xnio.ChannelListener;
+import org.xnio.IoUtils;
+import org.xnio.XnioExecutor;
+import org.xnio.channels.StreamSinkChannel;
 
 import javax.websocket.EncodeException;
 import javax.websocket.RemoteEndpoint;
@@ -30,11 +34,11 @@ import java.io.OutputStream;
 import java.io.Writer;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
  * TODO:
- *  - Handle async send timeouts.
  *  - Handle send Object
  *  - Implement sendPartial*
  *
@@ -45,8 +49,10 @@ public class DefaultRemoteEndpoint implements RemoteEndpoint {
     private volatile boolean batchingAllowed;
     private volatile long asyncSendTimeout;
 
+
     public DefaultRemoteEndpoint(WebSocketChannelSession session) {
         this.session = session;
+
     }
 
     @Override
@@ -124,20 +130,16 @@ public class DefaultRemoteEndpoint implements RemoteEndpoint {
 
     @Override
     public void sendStringByCompletion(String s, SendHandler sendHandler) {
-        try {
-            final ByteBuffer buffer = WebSocketUtils.fromUtf8String(s);
-            StreamSinkFrameChannel sink = session.getChannel().send(WebSocketFrameType.BINARY, buffer.remaining());
-            WebSocketJsrUtils.send(sink, buffer, sendHandler);
-        } catch (Throwable cause) {
-            sendHandler.setResult(new SendResult(cause));
-        }
+        final ByteBuffer buffer = WebSocketUtils.fromUtf8String(s);
+        sendByCompletion(WebSocketFrameType.TEXT, buffer, sendHandler, getAsyncSendTimeout());
     }
 
     @Override
     public Future<SendResult> sendStringByFuture(String s) {
         DefaultFuture future = new DefaultFuture();
         try {
-            sendStringByCompletion(s, future);
+            final ByteBuffer buffer = WebSocketUtils.fromUtf8String(s);
+            sendByCompletion(WebSocketFrameType.TEXT, buffer, future, -1);
         } catch (Throwable t) {
             future.setResult(new SendResult(t));
         }
@@ -148,7 +150,7 @@ public class DefaultRemoteEndpoint implements RemoteEndpoint {
     public Future<SendResult> sendBytesByFuture(ByteBuffer byteBuffer) {
         DefaultFuture future = new DefaultFuture();
         try {
-            sendBytesByCompletion(byteBuffer, future);
+            sendByCompletion(WebSocketFrameType.BINARY, byteBuffer, future, -1);
         } catch (Throwable t) {
             future.setResult(new SendResult(t));
         }
@@ -157,14 +159,27 @@ public class DefaultRemoteEndpoint implements RemoteEndpoint {
 
     @Override
     public void sendBytesByCompletion(ByteBuffer byteBuffer, SendHandler sendHandler) {
+        sendByCompletion(WebSocketFrameType.BINARY, byteBuffer, sendHandler, getAsyncSendTimeout());
+    }
+
+    private void sendByCompletion(WebSocketFrameType type, ByteBuffer byteBuffer, SendHandler sendHandler, long timeout) {
         try {
-            StreamSinkFrameChannel sink = session.getChannel().send(WebSocketFrameType.BINARY, byteBuffer.remaining());
+            StreamSinkFrameChannel sink = session.getChannel().send(type, byteBuffer.remaining());
+
+            if (timeout > 0) {
+                final XnioExecutor.Key key = sink.getWriteThread().executeAfter(new WriteTimeoutTask(session, sink), timeout, TimeUnit.MILLISECONDS);
+                sink.getCloseSetter().set(new ChannelListener<StreamSinkChannel>() {
+                    @Override
+                    public void handleEvent(StreamSinkChannel sink) {
+                        key.remove();
+                    }
+                });
+            }
             WebSocketJsrUtils.send(sink, byteBuffer, sendHandler);
         } catch (Throwable cause) {
             sendHandler.setResult(new SendResult(cause));
         }
     }
-
     @Override
     public Future<SendResult> sendObjectByFuture(Object o) {
         DefaultFuture future = new DefaultFuture();
@@ -208,4 +223,22 @@ public class DefaultRemoteEndpoint implements RemoteEndpoint {
         }
     }
 
+    private static final class WriteTimeoutTask implements Runnable {
+        private final WebSocketChannelSession session;
+        private final StreamSinkFrameChannel sink;
+        public WriteTimeoutTask(WebSocketChannelSession session, StreamSinkFrameChannel sink) {
+            this.session = session;
+            this.sink = sink;
+        }
+        @Override
+        public void run() {
+            // TODO: Proper status code ?
+            try {
+                session.close();
+                IoUtils.safeClose(sink);
+            } catch (IOException e) {
+                // ignore
+            }
+        }
+    }
 }
