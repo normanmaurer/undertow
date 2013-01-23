@@ -32,6 +32,7 @@ import org.xnio.channels.StreamSourceChannel;
 
 import javax.websocket.CloseReason;
 import javax.websocket.Endpoint;
+import javax.websocket.EndpointConfiguration;
 import javax.websocket.MessageHandler;
 import javax.websocket.PongMessage;
 import javax.websocket.RemoteEndpoint;
@@ -70,9 +71,12 @@ final class WebSocketChannelSession implements Session {
     private volatile long maximumMessageSize;
     private final String id = UUID.randomUUID().toString();
     private final Endpoint endpoint;
-    public WebSocketChannelSession(WebSocketChannel channel, WebSocketContainer container, final Endpoint endpoint, Principal principal) {
+    private final EndpointConfiguration config;
+
+    public WebSocketChannelSession(WebSocketChannel channel, WebSocketContainer container, final Endpoint endpoint, Principal principal, EndpointConfiguration config) {
         this.channel = channel;
         this.container = container;
+        this.config = config;
         try {
             uri = new URI(channel.getUrl());
         } catch (URISyntaxException e) {
@@ -83,6 +87,10 @@ final class WebSocketChannelSession implements Session {
         remoteEndpoint = new DefaultRemoteEndpoint(this);
         channel.getReceiveSetter().set(new WebSocketChannelSessionListener(endpoint));
         channel.resumeReceives();
+    }
+
+    EndpointConfiguration getConfig() {
+        return config;
     }
 
     WebSocketChannel getChannel() {
@@ -98,6 +106,7 @@ final class WebSocketChannelSession implements Session {
         return container;
     }
 
+    @SuppressWarnings("rawtypes")
     @Override
     public void addMessageHandler(MessageHandler messageHandler) throws IllegalStateException {
         // TODO: Think about if there is an easier and cleaner way of doing this
@@ -231,10 +240,13 @@ final class WebSocketChannelSession implements Session {
         try {
             StreamSinkFrameChannel sink = channel.send(WebSocketFrameType.CLOSE, size);
             WebSocketJsrUtils.send(sink, buffer, future);
-            future.get();
+            SendResult result = future.get();
+            if (!result.isOK()) {
+                throw WebSocketJsrUtils.wrap(result.getException());
+            }
             IoUtils.safeClose(channel);
         } catch (Throwable cause) {
-            future.setResult(new SendResult(cause));
+            throw WebSocketJsrUtils.wrap(cause);
         } finally {
             pooled.free();
         }
@@ -398,8 +410,10 @@ final class WebSocketChannelSession implements Session {
                 MessageHandler handler;
                 if (frameType == WebSocketFrameType.PONG) {
                     handler = new MessageHandler.Basic<ByteBuffer>() {
+                        @SuppressWarnings({"rawtypes", "unchecked"})
                         @Override
                         public void onMessage(ByteBuffer byteBuffer) {
+
                             ((MessageHandler.Basic) messageHandler).onMessage(new DefaultPongMessage(byteBuffer));
                         }
                     };
@@ -409,6 +423,7 @@ final class WebSocketChannelSession implements Session {
                 final Class<?> clazz = typeOf(handler.getClass());
 
                 if (handler instanceof MessageHandler.Async) {
+                    @SuppressWarnings("rawtypes")
                     final MessageHandler.Async asyncHandler = (MessageHandler.Async) handler;
                     final Pooled<ByteBuffer> pooled = webSocketChannel.getBufferPool().allocate();
                     final ByteBuffer buffer = pooled.getResource();
@@ -481,6 +496,7 @@ final class WebSocketChannelSession implements Session {
                         }
                     }
                 } else if (handler instanceof MessageHandler.Basic) {
+                    @SuppressWarnings("rawtypes")
                     final MessageHandler.Basic basicHandler = (MessageHandler.Basic) handler;
                     if (type == WebSocketFrameType.TEXT && size > getContainer().getMaxTextMessageBufferSize()) {
                         WebSocketChannelSession.this.close(new CloseReason(CloseReason.CloseCodes.TOO_BIG, null));
@@ -541,6 +557,7 @@ final class WebSocketChannelSession implements Session {
             IoUtils.safeClose(source);
         }
 
+        @SuppressWarnings({"unchecked", "rawtypes"})
         private void notifyOnMessage(MessageHandler.Basic basicHandler, ByteBuffer buffer, Class<?> type) {
             if (type == ByteBuffer.class) {
                 basicHandler.onMessage(buffer);
@@ -566,6 +583,7 @@ final class WebSocketChannelSession implements Session {
             }
         }
 
+        @SuppressWarnings({"unchecked", "rawtypes"})
         private void notifyOnMessage(MessageHandler.Async asyncHandler, ByteBuffer buffer, boolean last, Class<?> type) {
             if (type == ByteBuffer.class) {
                 asyncHandler.onMessage(buffer, last);

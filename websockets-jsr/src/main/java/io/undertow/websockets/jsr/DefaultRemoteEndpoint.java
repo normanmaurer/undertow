@@ -26,6 +26,7 @@ import org.xnio.XnioExecutor;
 import org.xnio.channels.StreamSinkChannel;
 
 import javax.websocket.EncodeException;
+import javax.websocket.Encoder;
 import javax.websocket.RemoteEndpoint;
 import javax.websocket.SendHandler;
 import javax.websocket.SendResult;
@@ -124,8 +125,26 @@ public class DefaultRemoteEndpoint implements RemoteEndpoint {
     }
 
     @Override
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public void sendObject(Object o) throws IOException, EncodeException {
-        // TODO: Implement me
+        for (Encoder encoder: session.getConfig().getEncoders()) {
+            if (encoder.getClass().getTypeParameters()[0].getClass() == o.getClass()) {
+                if (encoder instanceof Encoder.Binary) {
+                    sendBytes(((Encoder.Binary) encoder).encode(o));
+                    return;
+                } else if (encoder instanceof Encoder.BinaryStream) {
+                    ((Encoder.BinaryStream) encoder).encode(o, getSendStream());
+                    return;
+                } else if (encoder instanceof Encoder.Text) {
+                    sendString(((Encoder.Text) encoder).encode(o));
+                    return;
+                } else if (encoder instanceof Encoder.TextStream) {
+                    ((Encoder.TextStream) encoder).encode(o, getSendWriter());
+                    return;
+                }
+            }
+        }
+        throw new EncodeException(o, "No Encoder found");
     }
 
     @Override
@@ -192,8 +211,30 @@ public class DefaultRemoteEndpoint implements RemoteEndpoint {
     }
 
     @Override
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public void sendObjectByCompletion(Object o, SendHandler sendHandler) {
-        // TODO: Implement me
+        try {
+            for (Encoder encoder : session.getConfig().getEncoders()) {
+                if (encoder.getClass().getTypeParameters()[0].getClass() == o.getClass()) {
+                    if (encoder instanceof Encoder.Binary) {
+                        sendBytesByCompletion(((Encoder.Binary) encoder).encode(o), sendHandler);
+                        return;
+                    } else if (encoder instanceof Encoder.BinaryStream) {
+                        ((Encoder.BinaryStream) encoder).encode(o, getSendStream());
+                        return;
+                    } else if (encoder instanceof Encoder.Text) {
+                        sendStringByCompletion(((Encoder.Text) encoder).encode(o), sendHandler);
+                        return;
+                    } else if (encoder instanceof Encoder.TextStream) {
+                        ((Encoder.TextStream) encoder).encode(o, getSendWriter());
+                        return;
+                    }
+                }
+            }
+            throw new EncodeException(o, "No Encoder found");
+        } catch (Throwable cause) {
+            sendHandler.setResult(new SendResult(cause));
+        }
     }
 
     @Override
